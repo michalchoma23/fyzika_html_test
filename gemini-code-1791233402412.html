@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <title>Investičný Simulátor s Porovnaním</title>
+  <!-- Overené stabilné verzie knižníc -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 30px;
+      background-color: #f4f4f4;
+    }
+    h1, h2 {
+      color: #2c3e50;
+    }
+    .input-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-bottom: 20px;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .input-col {
+      display: flex;
+      flex-direction: column;
+    }
+    label {
+      margin-top: 10px;
+      font-weight: bold;
+      font-size: 0.9em;
+      color: #333;
+    }
+    input, select {
+      padding: 8px;
+      margin-top: 5px;
+      width: 220px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .btn-main {
+      padding: 12px 30px;
+      background-color: #27ae60;
+      color: white;
+      font-size: 1.1em;
+      font-weight: bold;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn-main:hover { background-color: #2ecc71; }
+    
+    .zoom-btn {
+      background-color: #9b59b6;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      margin: 0 5px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .zoom-btn:hover { background-color: #8e44ad; }
+
+    .action-btn {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      margin: 5px 5px 0 0;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .action-btn:hover { background-color: #2980b9; }
+
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      background: white;
+      border-left: 5px solid #27ae60;
+      font-size: 1.1em;
+      border-radius: 0 8px 8px 0;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    #chart-container {
+      margin-top: 30px;
+      width: 100%;
+      max-width: 900px;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .table-container {
+      margin-top: 30px;
+      overflow-x: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: right;
+      font-size: 0.9em;
+    }
+    th {
+      background-color: #2c3e50;
+      color: white;
+      text-align: center;
+    }
+    td:first-child, th:first-child { text-align: left; }
+    .bg-comp { background: #eafaf1; }
+    .bg-simp { background: #eaf2f8; }
+  </style>
+</head>
+<body>
+  <h1>Investičný Simulátor (Zložené vs. Jednoduché úročenie)</h1>
+
+  <div class="input-group">
+    <div class="input-col">
+      <label>Počiatočná investícia (€):
+        <input type="number" id="investment" value="1000">
+      </label>
+      <label>Mesačný vklad (€):
+        <input type="number" id="monthlyDeposit" value="100">
+      </label>
+    </div>
+    <div class="input-col">
+      <label>Ročný výnos (%):
+        <input type="number" id="interestRate" value="6" step="0.1">
+      </label>
+      <label>Úrokové obdobie (pre zložené úr.):
+        <select id="compoundPeriod">
+          <option value="12">Mesačne</option>
+          <option value="4">Štvrťročne</option>
+          <option value="2">Polročne</option>
+          <option value="1" selected>Ročne</option>
+        </select>
+      </label>
+    </div>
+    <div class="input-col">
+      <label>Ročná inflácia (%):
+        <input type="number" id="inflationRate" value="2" step="0.1">
+      </label>
+      <label>Počet rokov:
+        <input type="number" id="years" value="20">
+      </label>
+    </div>
+  </div>
+
+  <button class="btn-main" onclick="runSimulation()">Vypočítať a zobraziť simuláciu</button>
+
+  <div id="result">Výsledky sa zobrazia tu...</div>
+
+  <div id="chart-container">
+    <canvas id="investmentChart"></canvas>
+    
+    <div style="margin-top: 25px; text-align: center;">
+      <strong style="margin-right: 10px;">Zobraziť výrez grafu:</strong>
+      <button class="zoom-btn" onclick="applyZoom(4)">Prvé 4 roky</button>
+      <button class="zoom-btn" onclick="applyZoom(10)">Prvých 10 rokov</button>
+      <button class="zoom-btn" onclick="applyZoom('all')">Zobraziť všetky roky</button>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <div style="margin-bottom: 15px;">
+      <strong style="margin-right: 10px;">Exportovať:</strong>
+      <label for="bgColorSelect" style="display:inline; margin-right: 5px;">Pozadie grafu:</label>
+      <select id="bgColorSelect" style="width: auto; padding: 4px; margin-right: 10px;">
+        <option value="#ffffff">Biela</option>
+        <option value="#f4f4f4">Svetlo sivá</option>
+      </select>
+      
+      <button class="action-btn" onclick="exportCSV()">CSV</button>
+      <button class="action-btn" onclick="exportPDF()">Tabuľka (PDF)</button>
+      <button class="action-btn" onclick="exportChart()">Graf (PNG)</button>
+      <button class="action-btn" onclick="exportChartAndTableToPDF()">Graf + Tabuľka (PDF)</button>
+    </div>
+    
+    <div id="table-wrapper"></div>
+  </div>
+
+  <script>
+    let myChart = null;
+    
+    // Globálne premenné pre dáta (využijeme ich pri priblížení grafu)
+    let globalData = {
+      labels: [],
+      compNom: [], compReal: [],
+      simpNom: [], simpReal: []
+    };
+
+    function runSimulation() {
+      const initial = parseFloat(document.getElementById("investment").value);
+      const monthly = parseFloat(document.getElementById("monthlyDeposit").value);
+      const rate = parseFloat(document.getElementById("interestRate").value) / 100;
+      const inflation = parseFloat(document.getElementById("inflationRate").value) / 100;
+      const years = parseInt(document.getElementById("years").value);
+      const periodsPerYear = parseInt(document.getElementById("compoundPeriod").value);
+
+      if (isNaN(initial) || isNaN(rate) || isNaN(inflation) || isNaN(monthly) || isNaN(years)) {
+        document.getElementById("result").innerHTML = "<span style='color:red;'>Prosím, vyplňte všetky polia správnymi číslami.</span>";
+        return;
+      }
+
+      // Inicializácia premenných
+      let compAmount = initial;
+      let totalContributions = initial;
+      let simpInterestTotal = 0; // Pre jednoduché úročenie úročíme len vklady
+
+      let tableHTML = `<table>
+        <thead>
+          <tr>
+            <th rowspan="2">Rok</th>
+            <th rowspan="2">Celkové vklady (€)</th>
+            <th colspan="2">Zložené úrokovanie</th>
+            <th colspan="2">Jednoduché úrokovanie</th>
+          </tr>
+          <tr>
+            <th>Nominál (€)</th>
+            <th>Reálne (€)</th>
+            <th>Nominál (€)</th>
+            <th>Reálne (€)</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+      // Reset globálnych dát
+      globalData = { labels: [], compNom: [], compReal: [], simpNom: [], simpReal: [] };
+
+      // Pridanie nultého roku
+      globalData.labels.push('Rok 0');
+      globalData.compNom.push(initial);
+      globalData.compReal.push(initial);
+      globalData.simpNom.push(initial);
+      globalData.simpReal.push(initial);
+
+      tableHTML += `<tr>
+          <td>0</td>
+          <td>${initial.toFixed(2)}</td>
+          <td class="bg-comp">${initial.toFixed(2)}</td>
+          <td class="bg-comp">${initial.toFixed(2)}</td>
+          <td class="bg-simp">${initial.toFixed(2)}</td>
+          <td class="bg-simp">${initial.toFixed(2)}</td>
+        </tr>`;
+
+      // Výpočet pre každý rok
+      for (let y = 1; y <= years; y++) {
+        for (let m = 1; m <= 12; m++) {
+          compAmount += monthly;
+          totalContributions += monthly;
+
+          // Zložené úrokovanie (pripisovanie podľa frekvencie)
+          if (m % (12 / periodsPerYear) === 0) {
+            compAmount *= (1 + rate / periodsPerYear);
+          }
+
+          // Jednoduché úrokovanie (úrok sa počíta iba z istiny/vkladov, nepripisuje sa k istine pre ďalšie úročenie)
+          simpInterestTotal += (totalContributions * rate) / 12;
+        }
+
+        let currentSimpAmount = totalContributions + simpInterestTotal;
+
+        // Očistenie o infláciu
+        let compReal = compAmount / Math.pow(1 + inflation, y);
+        let simpReal = currentSimpAmount / Math.pow(1 + inflation, y);
+
+        // Uloženie do grafu
+        globalData.labels.push(`Rok ${y}`);
+        globalData.compNom.push(compAmount);
+        globalData.compReal.push(compReal);
+        globalData.simpNom.push(currentSimpAmount);
+        globalData.simpReal.push(simpReal);
+
+        // Uloženie do tabuľky
+        tableHTML += `<tr>
+          <td>${y}</td>
+          <td>${totalContributions.toFixed(2)}</td>
+          <td class="bg-comp">${compAmount.toFixed(2)}</td>
+          <td class="bg-comp">${compReal.toFixed(2)}</td>
+          <td class="bg-simp">${currentSimpAmount.toFixed(2)}</td>
+          <td class="bg-simp">${simpReal.toFixed(2)}</td>
+        </tr>`;
+      }
+
+      tableHTML += `</tbody></table>`;
+      document.getElementById("table-wrapper").innerHTML = tableHTML;
+
+      const finalComp = globalData.compNom[globalData.compNom.length - 1];
+      const finalSimp = globalData.simpNom[globalData.simpNom.length - 1];
+
+      document.getElementById("result").innerHTML = 
+        `<strong>Po ${years} rokoch budete mať:</strong><br>
+         So zloženým úročením: <strong style="color: #27ae60; font-size:1.2em;">${finalComp.toFixed(2)} €</strong><br>
+         S jednoduchým úročením: <strong style="color: #2980b9; font-size:1.2em;">${finalSimp.toFixed(2)} €</strong>`;
+
+      // Vykreslíme celý graf
+      applyZoom('all');
+    }
+
+    // Funkcia, ktorá "odreže" dáta a prekreslí graf (funguje vždy a bez chýb)
+    function applyZoom(maxYears) {
+      if (globalData.labels.length === 0) return; // Ešte nebola spustená simulácia
+
+      let limit = maxYears === 'all' ? globalData.labels.length : maxYears + 1;
+      
+      let sliceLabels = globalData.labels.slice(0, limit);
+      let sliceCompNom = globalData.compNom.slice(0, limit);
+      let sliceCompReal = globalData.compReal.slice(0, limit);
+      let sliceSimpNom = globalData.simpNom.slice(0, limit);
+      let sliceSimpReal = globalData.simpReal.slice(0, limit);
+
+      drawChart(sliceLabels, sliceCompNom, sliceCompReal, sliceSimpNom, sliceSimpReal);
+    }
+
+    function drawChart(labels, compN, compR, simpN, simpR) {
+      const ctx = document.getElementById('investmentChart').getContext('2d');
+      if (myChart) myChart.destroy();
+
+      myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Zložené - Nominál',
+              data: compN,
+              borderColor: '#2ecc71',
+              backgroundColor: 'rgba(46, 204, 113, 0.1)',
+              fill: true,
+              tension: 0.2,
+              borderWidth: 2,
+              pointRadius: 2
+            },
+            {
+              label: 'Zložené - Reálne (očistené o infláciu)',
+              data: compR,
+              borderColor: '#27ae60',
+              borderDash: [5, 5],
+              fill: false,
+              tension: 0.2,
+              borderWidth: 2,
+              pointRadius: 2
+            },
+            {
+              label: 'Jednoduché - Nominál',
+              data: simpN,
+              borderColor: '#3498db',
+              backgroundColor: 'rgba(52, 152, 219, 0.1)',
+              fill: true,
+              tension: 0.2,
+              borderWidth: 2,
+              pointRadius: 2
+            },
+            {
+              label: 'Jednoduché - Reálne',
+              data: simpR,
+              borderColor: '#2980b9',
+              borderDash: [5, 5],
+              fill: false,
+              tension: 0.2,
+              borderWidth: 2,
+              pointRadius: 2
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return ` ${context.dataset.label}: ${context.parsed.y.toFixed(2)} €`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              ticks: {
+                callback: function(value) {
+                  return value.toLocaleString('sk-SK') + ' €';
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Exportovacie funkcie
+    function exportCSV() {
+      const rows = document.querySelectorAll("table tr");
+      if (rows.length === 0) return alert("Najprv spustite simuláciu.");
+      let csv = "";
+      rows.forEach(row => {
+        const cols = row.querySelectorAll("th, td");
+        const values = Array.from(cols).map(td => `"${td.innerText.replace(/"/g, '""')}"`);
+        csv += values.join(",") + "\n";
+      });
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "investicia_porovnanie.csv";
+      link.click();
+    }
+
+    function exportPDF() {
+      if (document.querySelectorAll("table tr").length === 0) return alert("Najprv spustite simuláciu.");
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('landscape');
+      doc.text("Ročný prehľad - Zložené vs Jednoduché úrokovanie", 14, 15);
+      doc.autoTable({ html: 'table', startY: 20, theme: 'grid', styles: { fontSize: 9 } });
+      doc.save("investicia_tabulka.pdf");
+    }
+
+    function exportChart() {
+      if (!myChart) return alert("Graf neexistuje.");
+      const origCanvas = document.getElementById('investmentChart');
+      const bgCanvas = document.createElement('canvas');
+      bgCanvas.width = origCanvas.width;
+      bgCanvas.height = origCanvas.height;
+      const ctx = bgCanvas.getContext('2d');
+      ctx.fillStyle = document.getElementById('bgColorSelect').value;
+      ctx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+      ctx.drawImage(origCanvas, 0, 0);
+      const link = document.createElement('a');
+      link.href = bgCanvas.toDataURL('image/png');
+      link.download = 'investicia_graf.png';
+      link.click();
+    }
+
+    function exportChartAndTableToPDF() {
+      if (!myChart || document.querySelectorAll("table tr").length === 0) return alert("Najprv spustite simuláciu.");
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('landscape');
+      
+      const origCanvas = document.getElementById('investmentChart');
+      const bgCanvas = document.createElement('canvas');
+      bgCanvas.width = origCanvas.width;
+      bgCanvas.height = origCanvas.height;
+      const ctx = bgCanvas.getContext('2d');
+      ctx.fillStyle = document.getElementById('bgColorSelect').value;
+      ctx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+      ctx.drawImage(origCanvas, 0, 0);
+      
+      doc.text("Graf vývoja investície", 14, 15);
+      doc.addImage(bgCanvas.toDataURL('image/png'), 'PNG', 15, 20, 260, 100);
+      
+      doc.text("Tabuľka hodnôt", 14, 130);
+      doc.autoTable({ html: 'table', startY: 135, theme: 'grid', styles: { fontSize: 8 } });
+      
+      doc.save("investicia_komplet.pdf");
+    }
+
+    // Spustí sa automaticky po načítaní stránky
+    window.addEventListener("DOMContentLoaded", () => {
+      runSimulation();
+    });
+  </script>
+</body>
+</html>
